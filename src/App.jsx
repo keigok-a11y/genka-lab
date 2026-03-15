@@ -1,0 +1,315 @@
+import { useState, useEffect, useRef, useMemo } from "react";
+
+const STORAGE_KEY = "genka_materials_v1";
+const initialMaterials = [
+  { id: 1, name: "小麦粉", unit: "kg", price: 120 },
+  { id: 2, name: "砂糖", unit: "kg", price: 180 },
+  { id: 3, name: "バター", unit: "kg", price: 1200 },
+  { id: 4, name: "卵", unit: "個", price: 25 },
+  { id: 5, name: "牛乳", unit: "L", price: 210 },
+];
+
+function useLocalStorage(key, fallback) {
+  const [value, setValue] = useState(() => {
+    try { const s = localStorage.getItem(key); return s ? JSON.parse(s) : fallback; }
+    catch { return fallback; }
+  });
+  useEffect(() => { try { localStorage.setItem(key, JSON.stringify(value)); } catch {} }, [key, value]);
+  return [value, setValue];
+}
+
+function MaterialDropdown({ materials, onSelect }) {
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const ref = useRef();
+  const filtered = useMemo(() =>
+    materials.filter(m => m.name.toLowerCase().includes(query.toLowerCase()) || m.unit.includes(query)),
+    [materials, query]);
+  useEffect(() => {
+    const h = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, []);
+  const select = m => { onSelect(m); setQuery(""); setOpen(false); };
+  return (
+    <div ref={ref} style={{ position: "relative" }}>
+      <input style={styles.input} placeholder="🔍 原材料を検索・選択..." value={query}
+        onFocus={() => setOpen(true)}
+        onChange={e => { setQuery(e.target.value); setOpen(true); }} />
+      {open && (
+        <div style={styles.dropdownList}>
+          {filtered.length === 0
+            ? <div style={styles.dropdownEmpty}>見つかりません</div>
+            : filtered.map(m => (
+              <div key={m.id} style={styles.dropdownItem} onClick={() => select(m)}
+                onMouseEnter={e => e.currentTarget.style.background = "#f0f4ff"}
+                onMouseLeave={e => e.currentTarget.style.background = "white"}>
+                <span style={{ fontWeight: 600 }}>{m.name}</span>
+                <span style={{ color: "#888", fontSize: 12 }}>¥{m.price.toLocaleString()} / {m.unit}</span>
+              </div>
+            ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Tab({ label, active, onClick }) {
+  return (
+    <button onClick={onClick} style={{
+      ...styles.tab,
+      background: active ? "#1a1a2e" : "transparent",
+      color: active ? "#e8d5ff" : "#666",
+      borderBottom: active ? "2px solid #a78bfa" : "2px solid transparent",
+    }}>{label}</button>
+  );
+}
+
+export default function App() {
+  const [materials, setMaterials] = useLocalStorage(STORAGE_KEY, initialMaterials);
+  const [tab, setTab] = useState("calc");
+  const [rows, setRows] = useState([{ matId: null, mat: null, qty: "" }]);
+  const [sellingPrice, setSellingPrice] = useState("");
+  const [targetRate, setTargetRate] = useState("35");
+  const [productName, setProductName] = useState("");
+  const [newName, setNewName] = useState("");
+  const [newUnit, setNewUnit] = useState("kg");
+  const [newPrice, setNewPrice] = useState("");
+  const [editId, setEditId] = useState(null);
+  const [editPrice, setEditPrice] = useState("");
+  const [masterSearch, setMasterSearch] = useState("");
+
+  const totalCost = useMemo(() =>
+    rows.reduce((sum, r) => (!r.mat || !r.qty) ? sum : sum + r.mat.price * parseFloat(r.qty || 0), 0),
+    [rows]);
+  const selling = parseFloat(sellingPrice) || 0;
+  const costRate = selling > 0 ? (totalCost / selling) * 100 : 0;
+  const grossProfit = selling - totalCost;
+  const suggestedPrice = totalCost > 0 ? Math.ceil(totalCost / (parseFloat(targetRate) / 100)) : 0;
+  const rateColor = costRate === 0 ? "#aaa" : costRate <= 30 ? "#22c55e" : costRate <= 40 ? "#f59e0b" : "#ef4444";
+
+  const addRow = () => setRows(r => [...r, { matId: null, mat: null, qty: "" }]);
+  const removeRow = i => setRows(r => r.filter((_, idx) => idx !== i));
+  const setRowMat = (i, mat) => setRows(r => r.map((row, idx) => idx === i ? { ...row, mat, matId: mat.id } : row));
+  const setRowQty = (i, qty) => setRows(r => r.map((row, idx) => idx === i ? { ...row, qty } : row));
+  const addMaterial = () => {
+    if (!newName || !newPrice) return;
+    setMaterials(m => [...m, { id: Date.now(), name: newName, unit: newUnit, price: parseFloat(newPrice) }]);
+    setNewName(""); setNewPrice("");
+  };
+  const deleteMaterial = id => {
+    setMaterials(m => m.filter(x => x.id !== id));
+    setRows(r => r.map(row => row.matId === id ? { matId: null, mat: null, qty: row.qty } : row));
+  };
+  const saveEdit = id => {
+    setMaterials(m => m.map(x => x.id === id ? { ...x, price: parseFloat(editPrice) } : x));
+    setRows(r => r.map(row => row.matId === id ? { ...row, mat: { ...row.mat, price: parseFloat(editPrice) } } : row));
+    setEditId(null);
+  };
+  const filteredMaster = materials.filter(m => m.name.includes(masterSearch) || m.unit.includes(masterSearch));
+
+  return (
+    <div style={styles.root}>
+      <div style={styles.header}>
+        <div style={styles.headerInner}>
+          <div style={styles.logo}>⚖️ GenkaLab</div>
+          <div style={styles.subtitle}>仕入れ原価管理・適正売価計算システム</div>
+        </div>
+      </div>
+      <div style={styles.tabBar}>
+        <Tab label="📊 原価計算" active={tab === "calc"} onClick={() => setTab("calc")} />
+        <Tab label="📦 原材料マスタ" active={tab === "master"} onClick={() => setTab("master")} />
+      </div>
+      <div style={styles.body}>
+        {tab === "calc" && (
+          <div>
+            <div style={styles.card}>
+              <div style={styles.cardTitle}>🍽 商品名（任意）</div>
+              <input style={styles.input} placeholder="例: チョコケーキ" value={productName} onChange={e => setProductName(e.target.value)} />
+            </div>
+            <div style={styles.card}>
+              <div style={styles.cardTitle}>📋 使用原材料</div>
+              {rows.map((row, i) => (
+                <div key={i} style={styles.rowLine}>
+                  <div style={{ flex: 2 }}>
+                    {row.mat
+                      ? <div style={styles.selectedMat}>
+                          <span style={{ fontWeight: 600 }}>{row.mat.name}</span>
+                          <span style={styles.matBadge}>¥{row.mat.price.toLocaleString()}/{row.mat.unit}</span>
+                          <button style={styles.clearBtn} onClick={() => setRowMat(i, null)}>✕</button>
+                        </div>
+                      : <MaterialDropdown materials={materials} onSelect={m => setRowMat(i, m)} />}
+                  </div>
+                  <div style={{ flex: "0 0 120px" }}>
+                    <input style={{ ...styles.input, textAlign: "right" }} type="number" min="0" step="0.001"
+                      placeholder={row.mat ? `数量(${row.mat.unit})` : "数量"}
+                      value={row.qty} onChange={e => setRowQty(i, e.target.value)} />
+                  </div>
+                  <div style={{ flex: "0 0 100px", textAlign: "right", color: row.mat && row.qty ? "#1a1a2e" : "#ccc", fontWeight: 600, fontSize: 13 }}>
+                    {row.mat && row.qty ? `¥${(row.mat.price * parseFloat(row.qty)).toLocaleString()}` : "¥ —"}
+                  </div>
+                  {rows.length > 1 && <button style={styles.removeBtn} onClick={() => removeRow(i)}>🗑</button>}
+                </div>
+              ))}
+              <button style={styles.addRowBtn} onClick={addRow}>＋ 原材料を追加</button>
+            </div>
+            <div style={styles.card}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <div>
+                  <div style={styles.cardTitle}>💴 実際の売値（円）</div>
+                  <input style={styles.input} type="number" min="0" placeholder="例: 580" value={sellingPrice} onChange={e => setSellingPrice(e.target.value)} />
+                </div>
+                <div>
+                  <div style={styles.cardTitle}>🎯 目標原価率（%）</div>
+                  <input style={styles.input} type="number" min="1" max="100" placeholder="例: 35" value={targetRate} onChange={e => setTargetRate(e.target.value)} />
+                </div>
+              </div>
+            </div>
+            <div style={styles.resultCard}>
+              <div style={styles.resultTitle}>{productName ? `「${productName}」の` : ""}原価計算結果</div>
+              <div style={styles.resultGrid}>
+                <div style={styles.resultItem}><div style={styles.resultLabel}>原材料費合計</div><div style={{ ...styles.resultValue, color: "#e8d5ff" }}>¥{totalCost.toLocaleString()}</div></div>
+                <div style={styles.resultItem}><div style={styles.resultLabel}>原価率</div><div style={{ ...styles.resultValue, color: rateColor }}>{selling > 0 ? `${costRate.toFixed(1)}%` : "—"}</div></div>
+                <div style={styles.resultItem}><div style={styles.resultLabel}>粗利益</div><div style={{ ...styles.resultValue, color: grossProfit >= 0 ? "#4ade80" : "#f87171" }}>{selling > 0 ? `¥${grossProfit.toLocaleString()}` : "—"}</div></div>
+                <div style={styles.resultItem}><div style={styles.resultLabel}>利益率</div><div style={{ ...styles.resultValue, color: grossProfit >= 0 ? "#4ade80" : "#f87171" }}>{selling > 0 ? `${((grossProfit / selling) * 100).toFixed(1)}%` : "—"}</div></div>
+              </div>
+              {totalCost > 0 && (
+                <div style={styles.suggestBox}>
+                  <div style={styles.suggestLabel}>目標原価率 {targetRate}% での適正売値</div>
+                  <div style={styles.suggestValue}>¥{suggestedPrice.toLocaleString()}<span style={styles.suggestSub}>（税抜き参考値）</span></div>
+                  {selling > 0 && (
+                    <div style={{ marginTop: 8, fontSize: 13, color: "#9ca3af" }}>
+                      現在の売値との差：
+                      <span style={{ fontWeight: 700, color: selling >= suggestedPrice ? "#4ade80" : "#f87171" }}>
+                        {selling >= suggestedPrice ? "+" : ""}{(selling - suggestedPrice).toLocaleString()}円
+                      </span>
+                      {selling < suggestedPrice ? " ← 値上げ推奨" : " ← 余裕あり"}
+                    </div>
+                  )}
+                </div>
+              )}
+              {selling > 0 && totalCost > 0 && (
+                <div style={{ marginTop: 16 }}>
+                  <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 4 }}>原価率ゲージ</div>
+                  <div style={styles.gauge}>
+                    <div style={{ ...styles.gaugeBar, width: `${Math.min(costRate, 100)}%`, background: rateColor }} />
+                    <div style={{ ...styles.gaugeTarget, left: `${Math.min(parseFloat(targetRate), 100)}%` }} />
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#6b7280", marginTop: 2 }}>
+                    <span>0%</span><span style={{ color: "#a78bfa" }}>目標 {targetRate}%</span><span>100%</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+        {tab === "master" && (
+          <div>
+            <div style={styles.card}>
+              <div style={styles.cardTitle}>➕ 新規原材料を追加</div>
+              <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1.5fr auto", gap: 8, alignItems: "flex-end" }}>
+                <div><label style={styles.label}>原材料名</label><input style={styles.input} placeholder="例: 薄力粉" value={newName} onChange={e => setNewName(e.target.value)} /></div>
+                <div><label style={styles.label}>単位</label>
+                  <select style={styles.input} value={newUnit} onChange={e => setNewUnit(e.target.value)}>
+                    {["kg","g","L","ml","個","枚","本","袋","箱","缶"].map(u => <option key={u}>{u}</option>)}
+                  </select>
+                </div>
+                <div><label style={styles.label}>仕入れ価格（円/単位）</label>
+                  <input style={styles.input} type="number" min="0" placeholder="例: 180"
+                    value={newPrice} onChange={e => setNewPrice(e.target.value)}
+                    onKeyDown={e => e.key === "Enter" && addMaterial()} />
+                </div>
+                <button style={{ ...styles.btnPrimary, whiteSpace: "nowrap" }} onClick={addMaterial}>登録</button>
+              </div>
+            </div>
+            <div style={{ marginBottom: 10 }}>
+              <input style={styles.input} placeholder="🔍 原材料を検索..." value={masterSearch} onChange={e => setMasterSearch(e.target.value)} />
+            </div>
+            <div style={styles.card}>
+              <div style={styles.cardTitle}>📋 登録済み原材料（{filteredMaster.length}件）</div>
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead>
+                  <tr style={{ borderBottom: "2px solid #e5e7eb" }}>
+                    <th style={styles.th}>原材料名</th><th style={styles.th}>単位</th>
+                    <th style={{ ...styles.th, textAlign: "right" }}>仕入れ価格</th><th style={styles.th}></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredMaster.map(m => (
+                    <tr key={m.id} style={{ borderBottom: "1px solid #f3f4f6" }}>
+                      <td style={styles.td}>{m.name}</td>
+                      <td style={styles.td}><span style={styles.unitBadge}>{m.unit}</span></td>
+                      <td style={{ ...styles.td, textAlign: "right" }}>
+                        {editId === m.id
+                          ? <div style={{ display: "flex", gap: 4, justifyContent: "flex-end" }}>
+                              <input style={{ ...styles.input, width: 100, textAlign: "right" }} type="number"
+                                value={editPrice} onChange={e => setEditPrice(e.target.value)}
+                                onKeyDown={e => e.key === "Enter" && saveEdit(m.id)} />
+                              <button style={styles.btnSmGreen} onClick={() => saveEdit(m.id)}>保存</button>
+                              <button style={styles.btnSmGray} onClick={() => setEditId(null)}>戻す</button>
+                            </div>
+                          : <span style={{ fontWeight: 700 }}>¥{m.price.toLocaleString()}<span style={{ fontWeight: 400, color: "#888", fontSize: 12 }}>/{m.unit}</span></span>}
+                      </td>
+                      <td style={{ ...styles.td, textAlign: "right" }}>
+                        <div style={{ display: "flex", gap: 4, justifyContent: "flex-end" }}>
+                          <button style={styles.btnSmBlue} onClick={() => { setEditId(m.id); setEditPrice(m.price); }}>編集</button>
+                          <button style={styles.btnSmRed} onClick={() => deleteMaterial(m.id)}>削除</button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {filteredMaster.length === 0 && <div style={{ textAlign: "center", color: "#aaa", padding: "24px 0", fontSize: 14 }}>原材料が登録されていません</div>}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+const styles = {
+  root: { fontFamily: "'Noto Sans JP','Hiragino Kaku Gothic ProN',sans-serif", minHeight: "100vh", background: "#f8f9fb", color: "#1a1a2e" },
+  header: { background: "#1a1a2e", color: "white", padding: "16px 24px" },
+  headerInner: { maxWidth: 860, margin: "0 auto" },
+  logo: { fontSize: 22, fontWeight: 700 },
+  subtitle: { fontSize: 12, color: "#a78bfa", marginTop: 2 },
+  tabBar: { background: "#1a1a2e", borderBottom: "1px solid #2d2d4e", padding: "0 24px", display: "flex", gap: 4 },
+  tab: { padding: "10px 18px", border: "none", cursor: "pointer", fontSize: 13, fontWeight: 500 },
+  body: { maxWidth: 860, margin: "0 auto", padding: "20px 16px" },
+  card: { background: "white", borderRadius: 12, padding: "16px 18px", marginBottom: 14, boxShadow: "0 1px 4px rgba(0,0,0,.07)" },
+  cardTitle: { fontSize: 13, fontWeight: 700, color: "#4b5563", marginBottom: 10 },
+  input: { width: "100%", padding: "9px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 14, outline: "none", background: "white", color: "#1a1a2e", boxSizing: "border-box" },
+  label: { display: "block", fontSize: 12, color: "#6b7280", marginBottom: 4 },
+  dropdownList: { position: "absolute", zIndex: 999, top: "calc(100% + 4px)", left: 0, right: 0, background: "white", border: "1.5px solid #e5e7eb", borderRadius: 10, maxHeight: 200, overflowY: "auto", boxShadow: "0 8px 24px rgba(0,0,0,.12)" },
+  dropdownItem: { padding: "9px 14px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 14 },
+  dropdownEmpty: { padding: "12px 14px", color: "#aaa", fontSize: 13 },
+  rowLine: { display: "flex", gap: 8, alignItems: "center", marginBottom: 8 },
+  selectedMat: { display: "flex", alignItems: "center", gap: 8, background: "#f0f4ff", border: "1.5px solid #c7d2fe", borderRadius: 8, padding: "8px 12px", fontSize: 14 },
+  matBadge: { background: "#e0e7ff", color: "#4338ca", borderRadius: 6, padding: "2px 7px", fontSize: 11, fontWeight: 600 },
+  clearBtn: { marginLeft: "auto", background: "none", border: "none", cursor: "pointer", color: "#9ca3af", fontSize: 13 },
+  removeBtn: { background: "none", border: "none", cursor: "pointer", fontSize: 16, color: "#d1d5db", flexShrink: 0 },
+  addRowBtn: { marginTop: 4, background: "none", border: "1.5px dashed #d1d5db", borderRadius: 8, padding: "7px 14px", color: "#9ca3af", cursor: "pointer", fontSize: 13, width: "100%" },
+  resultCard: { background: "linear-gradient(135deg,#1a1a2e 0%,#16213e 100%)", color: "white", borderRadius: 14, padding: "20px 22px", boxShadow: "0 4px 20px rgba(26,26,46,.2)" },
+  resultTitle: { fontSize: 14, color: "#a78bfa", fontWeight: 600, marginBottom: 16 },
+  resultGrid: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 12, marginBottom: 16 },
+  resultItem: { background: "rgba(255,255,255,.06)", borderRadius: 10, padding: "12px 14px" },
+  resultLabel: { fontSize: 11, color: "#9ca3af", marginBottom: 6 },
+  resultValue: { fontSize: 20, fontWeight: 700 },
+  suggestBox: { background: "rgba(167,139,250,.15)", border: "1px solid rgba(167,139,250,.4)", borderRadius: 10, padding: "14px 16px" },
+  suggestLabel: { fontSize: 12, color: "#c4b5fd", marginBottom: 6 },
+  suggestValue: { fontSize: 26, fontWeight: 800, color: "#e8d5ff" },
+  suggestSub: { fontSize: 12, fontWeight: 400, color: "#a78bfa", marginLeft: 8 },
+  gauge: { height: 10, background: "rgba(255,255,255,.1)", borderRadius: 5, position: "relative" },
+  gaugeBar: { height: "100%", borderRadius: 5, transition: "width .5s,background .5s" },
+  gaugeTarget: { position: "absolute", top: -3, width: 2, height: 16, background: "#a78bfa", borderRadius: 1, transform: "translateX(-50%)" },
+  th: { padding: "8px 10px", fontSize: 12, color: "#6b7280", textAlign: "left", fontWeight: 600 },
+  td: { padding: "10px 10px", fontSize: 14 },
+  unitBadge: { background: "#f3f4f6", color: "#374151", borderRadius: 6, padding: "2px 8px", fontSize: 12 },
+  btnPrimary: { background: "#1a1a2e", color: "white", border: "none", borderRadius: 8, padding: "9px 16px", fontWeight: 600, cursor: "pointer", fontSize: 14 },
+  btnSmBlue: { background: "#eff6ff", color: "#1d4ed8", border: "1px solid #bfdbfe", borderRadius: 6, padding: "4px 10px", fontSize: 12, cursor: "pointer", fontWeight: 500 },
+  btnSmRed: { background: "#fff1f2", color: "#be123c", border: "1px solid #fecdd3", borderRadius: 6, padding: "4px 10px", fontSize: 12, cursor: "pointer", fontWeight: 500 },
+  btnSmGreen: { background: "#f0fdf4", color: "#16a34a", border: "1px solid #bbf7d0", borderRadius: 6, padding: "4px 10px", fontSize: 12, cursor: "pointer", fontWeight: 500 },
+  btnSmGray: { background: "#f9fafb", color: "#374151", border: "1px solid #e5e7eb", borderRadius: 6, padding: "4px 10px", fontSize: 12, cursor: "pointer", fontWeight: 500 },
+};
