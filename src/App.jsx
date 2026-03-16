@@ -87,6 +87,7 @@ export default function App() {
   const [tab, setTab] = useState("calc");
   const [rows, setRows] = useState([{ matId: null, mat: null, qty: "" }]);
   const [sellingPrice, setSellingPrice] = useState("");
+  const [taxRate, setTaxRate] = useState("10");
   const [targetRate, setTargetRate] = useState("35");
   const [productName, setProductName] = useState("");
   const [newName, setNewName] = useState("");
@@ -99,7 +100,9 @@ export default function App() {
   const totalCost = useMemo(() =>
     rows.reduce((sum, r) => (!r.mat || !r.qty) ? sum : sum + r.mat.price * parseFloat(r.qty || 0), 0),
     [rows]);
-  const selling = parseFloat(sellingPrice) || 0;
+
+  const sellingRaw = parseFloat(sellingPrice) || 0;
+  const selling = taxRate === "0" ? sellingRaw : sellingRaw / (1 + parseFloat(taxRate) / 100);
   const costRate = selling > 0 ? (totalCost / selling) * 100 : 0;
   const grossProfit = selling - totalCost;
   const suggestedPrice = totalCost > 0 ? Math.ceil(totalCost / (parseFloat(targetRate) / 100)) : 0;
@@ -170,35 +173,75 @@ export default function App() {
               ))}
               <button style={styles.addRowBtn} onClick={addRow}>＋ 原材料を追加</button>
             </div>
+
+            {/* ── 販売価格・税率・目標原価率 ── */}
             <div style={styles.card}>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", gap: 12, alignItems: "flex-end" }}>
                 <div>
-                  <div style={styles.cardTitle}>💴 実際の売値（円）</div>
-                  <input style={styles.input} type="number" min="0" placeholder="例: 580" value={sellingPrice} onChange={e => setSellingPrice(e.target.value)} />
+                  <div style={styles.cardTitle}>💴 販売価格（円）</div>
+                  <input style={styles.input} type="number" min="0" placeholder="例: 580"
+                    value={sellingPrice} onChange={e => setSellingPrice(e.target.value)} />
+                </div>
+                <div>
+                  <div style={styles.cardTitle}>消費税率</div>
+                  <select style={{ ...styles.input, width: 120 }}
+                    value={taxRate} onChange={e => setTaxRate(e.target.value)}>
+                    <option value="10">税込 10%</option>
+                    <option value="8">税込 8%</option>
+                    <option value="0">税抜きのまま</option>
+                  </select>
                 </div>
                 <div>
                   <div style={styles.cardTitle}>🎯 目標原価率（%）</div>
-                  <input style={styles.input} type="number" min="1" max="100" placeholder="例: 35" value={targetRate} onChange={e => setTargetRate(e.target.value)} />
+                  <input style={styles.input} type="number" min="1" max="100" placeholder="例: 35"
+                    value={targetRate} onChange={e => setTargetRate(e.target.value)} />
                 </div>
               </div>
+              {sellingRaw > 0 && taxRate !== "0" && (
+                <div style={{ marginTop: 10, fontSize: 12, color: "#6b7280", background: "#f8f9fb", borderRadius: 8, padding: "6px 12px" }}>
+                  税抜き換算：<span style={{ fontWeight: 700, color: "#1a1a2e" }}>¥{Math.round(selling).toLocaleString()}</span> で原価率を計算
+                </div>
+              )}
             </div>
+
             <div style={styles.resultCard}>
               <div style={styles.resultTitle}>{productName ? `「${productName}」の` : ""}原価計算結果</div>
               <div style={styles.resultGrid}>
-                <div style={styles.resultItem}><div style={styles.resultLabel}>原材料費合計</div><div style={{ ...styles.resultValue, color: "#e8d5ff" }}>¥{totalCost.toLocaleString()}</div></div>
-                <div style={styles.resultItem}><div style={styles.resultLabel}>原価率</div><div style={{ ...styles.resultValue, color: rateColor }}>{selling > 0 ? `${costRate.toFixed(1)}%` : "—"}</div></div>
-                <div style={styles.resultItem}><div style={styles.resultLabel}>粗利益</div><div style={{ ...styles.resultValue, color: grossProfit >= 0 ? "#4ade80" : "#f87171" }}>{selling > 0 ? `¥${grossProfit.toLocaleString()}` : "—"}</div></div>
-                <div style={styles.resultItem}><div style={styles.resultLabel}>利益率</div><div style={{ ...styles.resultValue, color: grossProfit >= 0 ? "#4ade80" : "#f87171" }}>{selling > 0 ? `${((grossProfit / selling) * 100).toFixed(1)}%` : "—"}</div></div>
+                <div style={styles.resultItem}>
+                  <div style={styles.resultLabel}>原材料費合計</div>
+                  <div style={{ ...styles.resultValue, color: "#e8d5ff" }}>¥{totalCost.toLocaleString()}</div>
+                </div>
+                <div style={styles.resultItem}>
+                  <div style={styles.resultLabel}>原価率（税抜）</div>
+                  <div style={{ ...styles.resultValue, color: rateColor }}>{selling > 0 ? `${costRate.toFixed(1)}%` : "—"}</div>
+                </div>
+                <div style={styles.resultItem}>
+                  <div style={styles.resultLabel}>粗利益（税抜）</div>
+                  <div style={{ ...styles.resultValue, color: grossProfit >= 0 ? "#4ade80" : "#f87171" }}>
+                    {selling > 0 ? `¥${Math.round(grossProfit).toLocaleString()}` : "—"}
+                  </div>
+                </div>
+                <div style={styles.resultItem}>
+                  <div style={styles.resultLabel}>利益率（税抜）</div>
+                  <div style={{ ...styles.resultValue, color: grossProfit >= 0 ? "#4ade80" : "#f87171" }}>
+                    {selling > 0 ? `${((grossProfit / selling) * 100).toFixed(1)}%` : "—"}
+                  </div>
+                </div>
               </div>
               {totalCost > 0 && (
                 <div style={styles.suggestBox}>
-                  <div style={styles.suggestLabel}>目標原価率 {targetRate}% での適正売値</div>
-                  <div style={styles.suggestValue}>¥{suggestedPrice.toLocaleString()}<span style={styles.suggestSub}>（税抜き参考値）</span></div>
-                  {selling > 0 && (
+                  <div style={styles.suggestLabel}>目標原価率 {targetRate}% での適正売値（税抜き）</div>
+                  <div style={styles.suggestValue}>
+                    ¥{suggestedPrice.toLocaleString()}
+                    <span style={styles.suggestSub}>
+                      {taxRate !== "0" ? `→ 税込${Math.round(suggestedPrice * (1 + parseFloat(taxRate) / 100)).toLocaleString()}円` : "税抜き参考値"}
+                    </span>
+                  </div>
+                  {sellingRaw > 0 && (
                     <div style={{ marginTop: 8, fontSize: 13, color: "#9ca3af" }}>
-                      現在の売値との差：
+                      現在の税抜き売値との差：
                       <span style={{ fontWeight: 700, color: selling >= suggestedPrice ? "#4ade80" : "#f87171" }}>
-                        {selling >= suggestedPrice ? "+" : ""}{(selling - suggestedPrice).toLocaleString()}円
+                        {selling >= suggestedPrice ? "+" : ""}{Math.round(selling - suggestedPrice).toLocaleString()}円
                       </span>
                       {selling < suggestedPrice ? " ← 値上げ推奨" : " ← 余裕あり"}
                     </div>
@@ -207,7 +250,7 @@ export default function App() {
               )}
               {selling > 0 && totalCost > 0 && (
                 <div style={{ marginTop: 16 }}>
-                  <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 4 }}>原価率ゲージ</div>
+                  <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 4 }}>原価率ゲージ（税抜）</div>
                   <div style={styles.gauge}>
                     <div style={{ ...styles.gaugeBar, width: `${Math.min(costRate, 100)}%`, background: rateColor }} />
                     <div style={{ ...styles.gaugeTarget, left: `${Math.min(parseFloat(targetRate), 100)}%` }} />
