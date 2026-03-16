@@ -2,7 +2,6 @@ import { useState, useEffect, useRef, useMemo } from "react";
 
 const STORAGE_KEY = "genka_materials_v1";
 const initialMaterials = [
-  const initialMaterials = [
   { id: 1,  name: "リーフティー モーニング",          unit: "袋(50g)",      price: 490 },
   { id: 2,  name: "ハーブ 青",                        unit: "袋(5ヶ入)",    price: 490 },
   { id: 3,  name: "ハーブ 赤",                        unit: "袋(40g)",      price: 490 },
@@ -25,12 +24,6 @@ const initialMaterials = [
   { id: 20, name: "薄力粉 スーパーバイオレット",     unit: "袋(25kg)",     price: 5600 },
   { id: 21, name: "強力粉 春よ恋",                   unit: "袋(25kg)",     price: 7900 },
   { id: 22, name: "A卵",                             unit: "個",           price: 40 },
-];
-  { id: 1, name: "小麦粉", unit: "kg", price: 120 },
-  { id: 2, name: "砂糖", unit: "kg", price: 180 },
-  { id: 3, name: "バター", unit: "kg", price: 1200 },
-  { id: 4, name: "卵", unit: "個", price: 25 },
-  { id: 5, name: "牛乳", unit: "L", price: 210 },
 ];
 
 function useLocalStorage(key, fallback) {
