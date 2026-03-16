@@ -2,6 +2,30 @@ import { useState, useEffect, useRef, useMemo } from "react";
 
 const STORAGE_KEY = "genka_materials_v1";
 const initialMaterials = [
+  const initialMaterials = [
+  { id: 1,  name: "リーフティー モーニング",          unit: "袋(50g)",      price: 490 },
+  { id: 2,  name: "ハーブ 青",                        unit: "袋(5ヶ入)",    price: 490 },
+  { id: 3,  name: "ハーブ 赤",                        unit: "袋(40g)",      price: 490 },
+  { id: 4,  name: "ハーブ 青ゆず",                    unit: "袋(14g)",      price: 490 },
+  { id: 5,  name: "ジャスミン",                       unit: "袋(3ヶ入)",    price: 490 },
+  { id: 6,  name: "リーフティー 白桃",                unit: "袋(40g)",      price: 490 },
+  { id: 7,  name: "リーフティー ライチローズ",        unit: "袋(40g)",      price: 490 },
+  { id: 8,  name: "ハーブ シナモンローズレイボス",    unit: "袋(35g)",      price: 490 },
+  { id: 9,  name: "ティーバッグ 8種",                unit: "枚",           price: 56 },
+  { id: 10, name: "リーフティー アッサム",            unit: "袋(50g)",      price: 490 },
+  { id: 11, name: "冷凍パイシート カット(8.3×18)",    unit: "枚",           price: 134 },
+  { id: 12, name: "冷凍パイシート 未カット(49.8×36)", unit: "枚",           price: 1608 },
+  { id: 13, name: "中沢 カスタード",                  unit: "g",            price: 1.2 },
+  { id: 14, name: "根釧35%クリーム",                  unit: "本",           price: 1264 },
+  { id: 15, name: "北海道十勝よつ葉牛乳",            unit: "本",           price: 248 },
+  { id: 16, name: "キッコーマン 調整豆乳 1L",        unit: "本",           price: 265 },
+  { id: 17, name: "よつ葉無塩バター",                unit: "個",           price: 906 },
+  { id: 18, name: "よつ葉発酵バター",                unit: "個",           price: 936 },
+  { id: 19, name: "よつ葉発酵シートバター",          unit: "箱(1kg×10枚)", price: 19752 },
+  { id: 20, name: "薄力粉 スーパーバイオレット",     unit: "袋(25kg)",     price: 5600 },
+  { id: 21, name: "強力粉 春よ恋",                   unit: "袋(25kg)",     price: 7900 },
+  { id: 22, name: "A卵",                             unit: "個",           price: 40 },
+];
   { id: 1, name: "小麦粉", unit: "kg", price: 120 },
   { id: 2, name: "砂糖", unit: "kg", price: 180 },
   { id: 3, name: "バター", unit: "kg", price: 1200 },
